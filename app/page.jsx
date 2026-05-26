@@ -50,6 +50,9 @@ export default function DashboardPage() {
       const pesananSapiTotal = sapiMuqorrib.reduce((sum, m) => sum + totalBungkusMuqorrib(m), 0);
       const pesananDombaTotal = dombaMuqorrib.reduce((sum, m) => sum + totalBungkusMuqorrib(m), 0);
 
+      // Fetch panitia data
+      const { data: panitiaData } = await supabase.from('panitia').select('*');
+
       // Fetch daging summary
       const { data: dagingData } = await supabase.from('daging_summary').select('*');
       const dagingBersih = dagingData?.reduce((sum, d) => sum + (d.total_daging_bersih_kg || 0), 0) || 0;
@@ -62,6 +65,69 @@ export default function DashboardPage() {
       const { data: perolehanData } = await supabase
         .from('perolehan')
         .select('*, hewan_qurban!inner(jenis)');
+
+      const parsePartFromText = (text, bagian) => {
+        if (!text) return 0;
+        const t = text.toLowerCase();
+        
+        const keywords = {
+          kepala: [/kepala/i],
+          cokor: [/cokor/i, /kaki/i],
+          buntut: [/buntut/i, /ekor/i],
+          siki: [/siki/i, /torpedo/i],
+          ati: [/ati/i, /hati/i],
+          kulit: [/kulit/i],
+        };
+        
+        const patterns = keywords[bagian] || [];
+        for (const pattern of patterns) {
+          if (pattern.test(t)) {
+            const numMatch = t.match(new RegExp(`(\\d+)\\s*(?:bks|kg)?\\s*${pattern.source}`, 'i'));
+            if (numMatch) {
+              return parseInt(numMatch[1]) || 1;
+            }
+            
+            const numMatchAfter = t.match(new RegExp(`${pattern.source}\\s*(\\d+)`, 'i'));
+            if (numMatchAfter) {
+              return parseInt(numMatchAfter[1]) || 1;
+            }
+            
+            return 1;
+          }
+        }
+        return 0;
+      };
+
+      const getMuqorribAllocation = (hewanId, bagian) => {
+        const items = muqorribData?.filter((m) => m.hewan_qurban_id === hewanId) || [];
+        return items.reduce((sum, item) => {
+          const mainVal = (item.pesanan_1 || item.pesanan_2)
+            ? (parsePartFromText(item.pesanan_1, bagian) + parsePartFromText(item.pesanan_2, bagian))
+            : parsePartFromText(item.pesanan, bagian);
+
+          const pVal = mainVal + parsePartFromText(item.pesanan_tambahan, bagian);
+          return sum + pVal;
+        }, 0);
+      };
+
+      const getPanitiaAllocation = (hewanId, jenis, bagian) => {
+        const totalAllocated = panitiaData?.filter((p) => p.bagian === `${bagian}_${jenis}`).length || 0;
+        if (totalAllocated === 0) return 0;
+
+        const typeHewans = hewanData?.filter((h) => h.jenis === jenis).sort((a, b) => a.nomor_hewan - b.nomor_hewan) || [];
+        let remaining = totalAllocated;
+        const maxCapacity = bagian === 'cokor' ? 4 : 1;
+
+        for (const h of typeHewans) {
+          const allocatedToH = Math.min(remaining, maxCapacity);
+          if (h.id === hewanId) {
+            return allocatedToH;
+          }
+          remaining -= allocatedToH;
+          if (remaining <= 0) break;
+        }
+        return 0;
+      };
 
       const bagianOrder = ['kepala', 'cokor', 'buntut', 'siki', 'ati', 'kulit'];
       const sapiPerolehan = bagianOrder.map((bagian) => {
@@ -93,8 +159,25 @@ export default function DashboardPage() {
 
       const realisasi = bagianOrder.map((bagian) => {
         const items = perolehanData?.filter((p) => p.bagian === bagian) || [];
-        const diambil = items.reduce((sum, i) => sum + (i.jumlah_diambil || 0), 0);
-        const sisa = items.reduce((sum, i) => sum + (i.jumlah_sisa || 0), 0);
+        
+        let diambil = 0;
+        let sisa = 0;
+
+        items.forEach((item) => {
+          const jenis = item.hewan_qurban?.jenis || 'sapi';
+          const defaultAda = item.bagian === 'cokor' ? 4 : 1;
+          const ada = item.jumlah_ada !== undefined ? item.jumlah_ada : defaultAda;
+
+          const mqVal = getMuqorribAllocation(item.hewan_qurban_id, item.bagian);
+          const pnVal = getPanitiaAllocation(item.hewan_qurban_id, jenis, item.bagian);
+
+          const itemDiambil = mqVal + pnVal;
+          const itemSisa = ada - itemDiambil;
+
+          diambil += itemDiambil;
+          sisa += itemSisa;
+        });
+
         return {
           bagian: bagian.charAt(0).toUpperCase() + bagian.slice(1),
           diambil,
