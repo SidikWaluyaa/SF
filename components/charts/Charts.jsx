@@ -72,8 +72,9 @@ export function DonutChart({ sapiCount, dombaCount }) {
 }
 
 export function MustahiqBarChart({ data }) {
-  const names = data.map((d) => d.nama_kelompok);
-  const values = data.map((d) => d.jiwa_kk);
+  const sortedData = [...data].sort((a, b) => (a.jiwa_kk || 0) - (b.jiwa_kk || 0));
+  const names = sortedData.map((d) => d.nama_kelompok);
+  const values = sortedData.map((d) => d.jiwa_kk);
 
   const option = {
     backgroundColor: 'transparent',
