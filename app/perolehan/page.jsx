@@ -8,6 +8,35 @@ import { formatNumber, formatDecimal } from '@/lib/utils';
 import Header from '@/components/layout/Header';
 import KPICard from '@/components/ui/KPICard';
 import { BarChart3, Scale, Users, Save } from 'lucide-react';
+import Swal from 'sweetalert2';
+
+const showSuccess = (title, text) => {
+  Swal.fire({
+    title,
+    text,
+    icon: 'success',
+    confirmButtonColor: '#10B981',
+    background: '#121829',
+    color: '#f3f4f6',
+    customClass: {
+      popup: 'border border-emerald-500/20 rounded-2xl font-sans',
+    }
+  });
+};
+
+const showError = (title, text) => {
+  Swal.fire({
+    title,
+    text,
+    icon: 'error',
+    confirmButtonColor: '#EF4444',
+    background: '#121829',
+    color: '#f3f4f6',
+    customClass: {
+      popup: 'border border-red-500/20 rounded-2xl font-sans',
+    }
+  });
+};
 
 const BAGIAN_LIST_SAPI = ['kepala', 'cokor', 'buntut', 'siki', 'ati', 'kulit'];
 const BAGIAN_LIST_DOMBA = ['kepala', 'cokor', 'siki', 'ati', 'kulit'];
@@ -152,8 +181,11 @@ export default function PerolehanPage() {
   const getMuqorribAllocation = (hewanId, bagian) => {
     const items = muqorribList.filter((m) => m.hewan_qurban_id === hewanId);
     return items.reduce((sum, item) => {
-      const pVal = parsePartFromText(item.pesanan, bagian) +
-                   parsePartFromText(item.pesanan_tambahan, bagian);
+      const mainVal = (item.pesanan_1 || item.pesanan_2)
+        ? (parsePartFromText(item.pesanan_1, bagian) + parsePartFromText(item.pesanan_2, bagian))
+        : parsePartFromText(item.pesanan, bagian);
+
+      const pVal = mainVal + parsePartFromText(item.pesanan_tambahan, bagian);
       return sum + pVal;
     }, 0);
   };
@@ -207,8 +239,11 @@ export default function PerolehanPage() {
     const items = muqorribList.filter((m) => m.hewan_qurban_id === hewanId);
     const matched = [];
     for (const item of items) {
-      const pVal = parsePartFromText(item.pesanan, bagian) +
-                   parsePartFromText(item.pesanan_tambahan, bagian);
+      const mainVal = (item.pesanan_1 || item.pesanan_2)
+        ? (parsePartFromText(item.pesanan_1, bagian) + parsePartFromText(item.pesanan_2, bagian))
+        : parsePartFromText(item.pesanan, bagian);
+
+      const pVal = mainVal + parsePartFromText(item.pesanan_tambahan, bagian);
       if (pVal > 0) {
         matched.push({
           nama: item.nama_lengkap,
@@ -321,11 +356,11 @@ export default function PerolehanPage() {
         }
       }
 
-      alert('Seluruh data perolehan terintegrasi dan jumlah daging berhasil disimpan!');
+      showSuccess('Sukses Menyimpan!', 'Seluruh data perolehan terintegrasi dan jumlah daging berhasil disimpan!');
       fetchData();
     } catch (err) {
       console.error('Error saving:', err);
-      alert('Gagal menyimpan data: ' + err.message);
+      showError('Gagal Menyimpan!', 'Gagal menyimpan data: ' + err.message);
     } finally {
       setSaving(false);
     }
