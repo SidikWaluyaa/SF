@@ -8,6 +8,35 @@ import DataTable from '@/components/ui/DataTable';
 import Modal from '@/components/ui/Modal';
 import KPICard from '@/components/ui/KPICard';
 import { Beef, Plus, Pencil, Trash2, Package, Download, Upload } from 'lucide-react';
+import Swal from 'sweetalert2';
+
+const showSuccess = (title, text) => {
+  Swal.fire({
+    title,
+    text,
+    icon: 'success',
+    confirmButtonColor: '#10B981',
+    background: '#121829',
+    color: '#f3f4f6',
+    customClass: {
+      popup: 'border border-emerald-500/20 rounded-2xl font-sans',
+    }
+  });
+};
+
+const showError = (title, text) => {
+  Swal.fire({
+    title,
+    text,
+    icon: 'error',
+    confirmButtonColor: '#EF4444',
+    background: '#121829',
+    color: '#f3f4f6',
+    customClass: {
+      popup: 'border border-red-500/20 rounded-2xl font-sans',
+    }
+  });
+};
 
 const EMPTY_FORM = {
   nomor_urut: '',
@@ -63,28 +92,28 @@ export default function SapiPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Auto combine pesanan_1 and pesanan_2 into pesanan if they are filled
-    let combinedPesanan = form.pesanan;
-    if (form.pesanan_1 || form.pesanan_2) {
-      combinedPesanan = [form.pesanan_1, form.pesanan_2].map(s => s.trim()).filter(Boolean).join(' + ');
-    }
 
     const payload = {
       ...form,
-      pesanan: combinedPesanan,
       nomor_urut: parseInt(form.nomor_urut) || 0,
     };
 
+    let res;
     if (editingId) {
-      await supabase.from('muqorrib').update(payload).eq('id', editingId);
+      res = await supabase.from('muqorrib').update(payload).eq('id', editingId);
     } else {
-      await supabase.from('muqorrib').insert(payload);
+      res = await supabase.from('muqorrib').insert(payload);
     }
-    setModalOpen(false);
-    setEditingId(null);
-    setForm(EMPTY_FORM);
-    fetchData();
+
+    if (res.error) {
+      showError('Gagal Menyimpan!', res.error.message);
+    } else {
+      showSuccess('Sukses!', editingId ? 'Data muqorrib berhasil diperbarui' : 'Data muqorrib berhasil ditambahkan');
+      setModalOpen(false);
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+      fetchData();
+    }
   };
 
   const handleEdit = (row) => {
@@ -105,9 +134,31 @@ export default function SapiPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Yakin hapus data ini?')) return;
-    await supabase.from('muqorrib').delete().eq('id', id);
-    fetchData();
+    Swal.fire({
+      title: 'Apakah Anda yakin?',
+      text: "Data muqorrib ini akan dihapus secara permanen!",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#EF4444',
+      cancelButtonColor: '#374151',
+      confirmButtonText: 'Ya, Hapus!',
+      cancelButtonText: 'Batal',
+      background: '#121829',
+      color: '#f3f4f6',
+      customClass: {
+        popup: 'border border-red-500/20 rounded-2xl font-sans',
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const { error } = await supabase.from('muqorrib').delete().eq('id', id);
+        if (error) {
+          showError('Gagal Menghapus!', error.message);
+        } else {
+          showSuccess('Terhapus!', 'Data muqorrib berhasil dihapus.');
+          fetchData();
+        }
+      }
+    });
   };
 
   const handleAdd = () => {
@@ -123,8 +174,9 @@ export default function SapiPage() {
     const nextNo = hewanList.length > 0 ? Math.max(...hewanList.map((h) => h.nomor_hewan)) + 1 : 1;
     const { error } = await supabase.from('hewan_qurban').insert([{ jenis: 'sapi', nomor_hewan: nextNo }]);
     if (error) {
-      alert('Gagal menambah sapi: ' + error.message);
+      showError('Gagal Menambah Sapi!', error.message);
     } else {
+      showSuccess('Sukses!', `Sapi ${nextNo} berhasil ditambahkan.`);
       fetchData();
     }
   };
@@ -132,24 +184,43 @@ export default function SapiPage() {
   const handleDeleteHewan = async () => {
     const selectedHewan = hewanList.find((h) => h.id === filterHewan);
     if (!selectedHewan) return;
-    if (!confirm(`Yakin ingin menghapus Sapi ${selectedHewan.nomor_hewan} beserta seluruh data muqorrib-nya?`)) return;
-
-    const { error } = await supabase.from('hewan_qurban').delete().eq('id', filterHewan);
-    if (error) {
-      alert('Gagal menghapus sapi: ' + error.message);
-    } else {
-      setFilterHewan('all');
-      fetchData();
-    }
+    
+    Swal.fire({
+      title: 'Hapus Sapi ini?',
+      text: `Apakah Anda yakin ingin menghapus Sapi ${selectedHewan.nomor_hewan} beserta seluruh data muqorrib-nya?`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#EF4444',
+      cancelButtonColor: '#374151',
+      confirmButtonText: 'Ya, Hapus Sapi!',
+      cancelButtonText: 'Batal',
+      background: '#121829',
+      color: '#f3f4f6',
+      customClass: {
+        popup: 'border border-red-500/20 rounded-2xl font-sans',
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        const { error } = await supabase.from('hewan_qurban').delete().eq('id', filterHewan);
+        if (error) {
+          showError('Gagal Menghapus Sapi!', error.message);
+        } else {
+          showSuccess('Terhapus!', `Sapi ${selectedHewan.nomor_hewan} berhasil dihapus.`);
+          setFilterHewan('all');
+          fetchData();
+        }
+      }
+    });
   };
 
   const handleExport = () => {
     if (data.length === 0) {
-      alert('Tidak ada data muqorrib untuk di-export.');
+      showError('Gagal Export!', 'Tidak ada data muqorrib untuk di-export.');
       return;
     }
     const csvContent = convertToCSV(data, 'sapi');
     downloadCSV(csvContent, 'data_muqorrib_sapi.csv');
+    showSuccess('Sukses Export!', 'Data muqorrib berhasil di-export ke CSV.');
   };
 
   const handleImport = async (e) => {
@@ -162,7 +233,7 @@ export default function SapiPage() {
       const parsedLines = parseCSV(text);
 
       if (parsedLines.length <= 1) {
-        alert('File CSV kosong atau tidak valid.');
+        showError('Gagal Import!', 'File CSV kosong atau tidak valid.');
         return;
       }
 
@@ -170,7 +241,7 @@ export default function SapiPage() {
       const dataRows = parsedLines.slice(1).filter(row => row.length >= 3 && row[2]?.trim() !== '');
 
       if (dataRows.length === 0) {
-        alert('Tidak ada baris data muqorrib yang valid untuk di-import.');
+        showError('Gagal Import!', 'Tidak ada baris data muqorrib yang valid untuk di-import.');
         return;
       }
 
@@ -255,13 +326,13 @@ export default function SapiPage() {
           .insert(importedMuqorribs);
         
         if (importErr) {
-          alert('Gagal meng-import data: ' + importErr.message);
+          showError('Gagal Import!', 'Gagal meng-import data: ' + importErr.message);
         } else {
-          alert(`Sukses meng-import ${importedMuqorribs.length} data muqorrib sapi!`);
+          showSuccess('Sukses Import!', `Sukses meng-import ${importedMuqorribs.length} data muqorrib sapi!`);
           fetchData();
         }
       } else {
-        alert('Tidak ada data valid yang bisa di-import.');
+        showError('Gagal Import!', 'Tidak ada data valid yang bisa di-import.');
         setLoading(false);
       }
     };
